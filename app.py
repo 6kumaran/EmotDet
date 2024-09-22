@@ -3,6 +3,7 @@ import cv2
 import numpy as np
 import pandas as pd
 from tensorflow.keras.models import load_model
+from streamlit_webrtc import VideoTransformerBase, webrtc_streamer
 
 # Load pre-trained models and data
 try:
@@ -15,6 +16,25 @@ except Exception as e:
 
 # Define emotion labels
 emotion_labels = ['Angry', 'Disgust', 'Fear', 'Happy', 'Sad', 'Surprise', 'Neutral']
+
+class VideoTransformer(VideoTransformerBase):
+    def __init__(self):
+        self.last_emotion = ""
+        self.last_recommendations = pd.DataFrame(columns=['name', 'artist', 'mood', 'popularity'])
+
+    def transform(self, frame):
+        # Convert frame to RGB
+        img = cv2.cvtColor(frame.to_ndarray(format="bgr"), cv2.COLOR_BGR2RGB)
+        
+        # Detect emotions in the image
+        processed_frame, predicted_emotion = detect_emotions(img)
+
+        # Update recommendations if a new emotion is detected
+        if predicted_emotion != self.last_emotion:
+            self.last_emotion = predicted_emotion
+            self.last_recommendations = recommend_songs(predicted_emotion)
+
+        return processed_frame  # Return processed frame for display
 
 def detect_emotions(frame):
     gray_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
@@ -60,57 +80,11 @@ def recommend_songs(pred_class):
 def main():
     st.title("Real-Time Emotion Detection and Music Recommendation")
 
-    # Initialize session state for storing last detected emotion and recommendations
-    if 'last_emotion' not in st.session_state:
-        st.session_state.last_emotion = ""
-    
-    if 'last_recommendations' not in st.session_state:
-        st.session_state.last_recommendations = pd.DataFrame(columns=['name', 'artist', 'mood', 'popularity'])
-
-    # Start video capture
-    run = st.checkbox('Run Emotion Detection')
-    
-    # Placeholder for video feed and recommendations
-    video_placeholder = st.empty()
-    
-    if run:
-        cap = cv2.VideoCapture(0)
-
-        if not cap.isOpened():
-            st.error("Error opening video stream or file")
-            return
-        
-        while run:  # Continue capturing frames while run is True
-            ret, frame = cap.read()
-            if not ret:
-                st.error("Failed to capture image from webcam.")
-                break
-            
-            frame, emot = detect_emotions(frame)
-            frame_rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)  # Convert BGR to RGB for Streamlit
-            
-            # Display video frame
-            video_placeholder.image(frame_rgb)
-
-            # Update recommendations only if a new emotion is detected
-            if emot != st.session_state.last_emotion:
-                st.session_state.last_emotion = emot
-                st.session_state.last_recommendations = recommend_songs(emot)  # Store last recommendations
-
-            # Display last recommendations
-            if not st.session_state.last_recommendations.empty:
-                recommendations_placeholder = st.empty()
-                recommendations_placeholder.subheader("Recommended Songs Based on Last Detected Emotion:")
-                recommendations_placeholder.dataframe(st.session_state.last_recommendations)
-
-            # Allow Streamlit to rerun and check if run is still True
-            if not run:
-                break
-
-        cap.release()
+    # Start video capture using streamlit-webrtc
+    webrtc_streamer(key="example", video_transformer_factory=VideoTransformer)
 
     # Display last recommendations even after unchecking the checkbox
-    if not st.session_state.last_recommendations.empty:
+    if st.session_state.get('last_recommendations') is not None and not st.session_state.last_recommendations.empty:
         st.subheader("Recommended Songs Based on Last Detected Emotion:")
         st.dataframe(st.session_state.last_recommendations)
 
