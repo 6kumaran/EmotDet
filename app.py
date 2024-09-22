@@ -2,7 +2,8 @@ import streamlit as st
 import numpy as np
 import pandas as pd
 from tensorflow.keras.models import load_model
-from streamlit_webrtc import VideoTransformerBase, webrtc_streamer
+from streamlit_webrtc import VideoProcessorBase, webrtc_streamer
+import av
 
 # Load pre-trained models and data
 try:
@@ -15,27 +16,24 @@ except Exception as e:
 # Define emotion labels
 emotion_labels = ['Angry', 'Disgust', 'Fear', 'Happy', 'Sad', 'Surprise', 'Neutral']
 
-class VideoTransformer(VideoTransformerBase):
+class VideoProcessor(VideoProcessorBase):
     def __init__(self):
         self.last_emotion = ""
         self.last_recommendations = pd.DataFrame(columns=['name', 'artist', 'mood', 'popularity'])
 
-    def transform(self, frame):
-        img = frame.to_ndarray(format="bgr")
-        img_rgb = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)  # Convert BGR to RGB
-        
-        # Detect emotions in the image
-        processed_frame, predicted_emotion = detect_emotions(img_rgb)
+    def recv(self, frame):
+        img = frame.to_ndarray(format="bgr24")
+        processed_frame, predicted_emotion = detect_emotions(img)
 
         # Update recommendations if a new emotion is detected
         if predicted_emotion != self.last_emotion:
             self.last_emotion = predicted_emotion
             self.last_recommendations = recommend_songs(predicted_emotion)
 
-        return processed_frame  # Return processed frame for display
+        return av.VideoFrame.from_ndarray(processed_frame, format="bgr24")
 
 def detect_emotions(frame):
-    gray_frame = cv2.cvtColor(frame, cv2.COLOR_RGB2GRAY)
+    gray_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
     faces = face_cascade.detectMultiScale(gray_frame, scaleFactor=1.3, minNeighbors=5)
     predicted_emotion = ""
     
@@ -78,13 +76,16 @@ def recommend_songs(pred_class):
 def main():
     st.title("Real-Time Emotion Detection and Music Recommendation")
 
-    # Start video capture using streamlit-webrtc
-    webrtc_streamer(key="example", video_transformer_factory=VideoTransformer)
+    webrtc_streamer(
+        key="example",
+        video_processor_factory=VideoProcessor,
+        rtc_configuration={"iceServers": [{"urls": ["stun:stun.l.google.com:19302"]}]}
+    )
 
-    # Display last recommendations even after unchecking the checkbox
-    if st.session_state.get('last_recommendations') is not None and not st.session_state.last_recommendations.empty:
+    # Display last recommendations if available
+    if VideoProcessor().last_recommendations is not None and not VideoProcessor().last_recommendations.empty:
         st.subheader("Recommended Songs Based on Last Detected Emotion:")
-        st.dataframe(st.session_state.last_recommendations)
+        st.dataframe(VideoProcessor().last_recommendations)
 
 if __name__ == "__main__":
     main()
