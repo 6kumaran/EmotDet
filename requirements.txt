@@ -1,5 +1,6 @@
 streamlit
-opencv-python-headless
-tensorflow
-pandas
+opencv-python
 numpy
+pandas
+tensorflow
+streamlit-webrtc
