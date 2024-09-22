@@ -33,7 +33,10 @@ class VideoProcessor(VideoProcessorBase):
         return av.VideoFrame.from_ndarray(processed_frame, format="bgr24")
 
 def detect_emotions(frame):
+    # Convert frame to grayscale
     gray_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+    
+    # Use Haar Cascade to detect faces
     faces = face_cascade.detectMultiScale(gray_frame, scaleFactor=1.3, minNeighbors=5)
     predicted_emotion = ""
     
@@ -43,6 +46,7 @@ def detect_emotions(frame):
         roi_gray = roi_gray.astype('float32') / 255  # Normalize the image
         
         roi_gray = roi_gray.reshape(1, 48, 48, 1)
+        
         # Predict the emotion
         predictions = emotion_model.predict(roi_gray)
         max_index = predictions[0].argmax()
