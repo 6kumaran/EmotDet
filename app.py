@@ -1,5 +1,4 @@
 import streamlit as st
-import cv2
 import numpy as np
 import pandas as pd
 from tensorflow.keras.models import load_model
@@ -7,7 +6,6 @@ from streamlit_webrtc import VideoTransformerBase, webrtc_streamer
 
 # Load pre-trained models and data
 try:
-    face_cascade = cv2.CascadeClassifier(cv2.data.haarcascades + 'haarcascade_frontalface_default.xml')
     emotion_model = load_model('model.h5')
     Music_Player = pd.read_csv("data_moods.csv")[['name', 'artist', 'mood', 'popularity']]
 except Exception as e:
@@ -23,11 +21,11 @@ class VideoTransformer(VideoTransformerBase):
         self.last_recommendations = pd.DataFrame(columns=['name', 'artist', 'mood', 'popularity'])
 
     def transform(self, frame):
-        # Convert frame to RGB
-        img = cv2.cvtColor(frame.to_ndarray(format="bgr"), cv2.COLOR_BGR2RGB)
+        img = frame.to_ndarray(format="bgr")
+        img_rgb = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)  # Convert BGR to RGB
         
         # Detect emotions in the image
-        processed_frame, predicted_emotion = detect_emotions(img)
+        processed_frame, predicted_emotion = detect_emotions(img_rgb)
 
         # Update recommendations if a new emotion is detected
         if predicted_emotion != self.last_emotion:
@@ -37,7 +35,7 @@ class VideoTransformer(VideoTransformerBase):
         return processed_frame  # Return processed frame for display
 
 def detect_emotions(frame):
-    gray_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+    gray_frame = cv2.cvtColor(frame, cv2.COLOR_RGB2GRAY)
     faces = face_cascade.detectMultiScale(gray_frame, scaleFactor=1.3, minNeighbors=5)
     predicted_emotion = ""
     
@@ -52,7 +50,7 @@ def detect_emotions(frame):
         max_index = predictions[0].argmax()
         predicted_emotion = emotion_labels[max_index]
         
-        # Draw rectangle around the face and put text
+        # Draw rectangle around the face and put text (optional)
         cv2.rectangle(frame, (x, y), (x + w, y + h), (255, 0, 0), 2)
         cv2.putText(frame, predicted_emotion, (x, y - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.9, (36, 255, 12), 2)
 
